@@ -151,6 +151,7 @@
            TYPE                     = 16
            LINGER                   = 17
            BACKLOG                  = 19
+           RCVHWM                   = 24
            LAST_ENDPOINT            = 32
            IMMEDIATE                = 39
            IPV6                     = 42
@@ -228,27 +229,32 @@
     [(FD           ) (getsockopt->fixint obj name)]
     [(EVENTS       ) (cast (getsockopt->fixint obj name) _fixint _event_state)]
     [(TYPE         ) (cast (getsockopt->fixint obj name) _fixint _socket_type)]
+    [(LINGER       ) (getsockopt->fixint obj name)]
     [(BACKLOG      ) (getsockopt->fixint obj name)]
+    [(RCVHWM       ) (getsockopt->fixint obj name)]
     [(LAST_ENDPOINT) (getsockopt->string obj name)]
     [(IMMEDIATE    ) (getsockopt->bool obj name)]
     [(IPV6         ) (getsockopt->bool obj name)]
-    [(CURVE_PUBLICKEY      ) (getsockopt->bin obj 'CURVE_PUBLICKEY)]
-    [(CURVE_PUBLICKEY->BIN ) (getsockopt->bin obj 'CURVE_PUBLICKEY)]
-    [(CURVE_PUBLICKEY->Z85 ) (getsockopt->z85 obj 'CURVE_PUBLICKEY)]
+    [(CURVE_PUBLICKEY     ) (getsockopt->bin obj 'CURVE_PUBLICKEY)]
+    [(CURVE_PUBLICKEY->BIN) (getsockopt->bin obj 'CURVE_PUBLICKEY)]
+    [(CURVE_PUBLICKEY->Z85) (getsockopt->z85 obj 'CURVE_PUBLICKEY)]
     [(CURVE_PRIVATEKEY     ) (getsockopt->bin obj 'CURVE_PRIVATEKEY)]
     [(CURVE_PRIVATEKEY->BIN) (getsockopt->bin obj 'CURVE_PRIVATEKEY)]
     [(CURVE_PRIVATEKEY->Z85) (getsockopt->z85 obj 'CURVE_PRIVATEKEY)]
-    [(CURVE_SERVERKEY      ) (getsockopt->bin obj 'CURVE_SERVERKEY)]
-    [(CURVE_SERVERKEY->BIN ) (getsockopt->bin obj 'CURVE_SERVERKEY)]
-    [(CURVE_SERVERKEY->Z85 ) (getsockopt->z85 obj 'CURVE_SERVERKEY)]
+    [(CURVE_SERVERKEY     ) (getsockopt->bin obj 'CURVE_SERVERKEY)]
+    [(CURVE_SERVERKEY->BIN) (getsockopt->bin obj 'CURVE_SERVERKEY)]
+    [(CURVE_SERVERKEY->Z85) (getsockopt->z85 obj 'CURVE_SERVERKEY)]
     [(HANDSHAKE_IVL) (getsockopt->fixint obj name)]
     ))
 
 (provide zmq_getsockopt)
 
 (module+ test
-  (define-syntax-rule (check-getsockopt binop obj name val)
+  (define-syntax-rule (check-getsockopt obj name binop val)
     (check binop (zmq_getsockopt obj name) val))
+
+  (define-syntax-rule (check-getsockopt-len obj name len)
+    (check = (bytes-length (zmq_getsockopt obj name)) len))
 
   (let* ([C (zmq_ctx_new)]
          [P (zmq_socket C 'REP)]
@@ -256,28 +262,30 @@
     (check-equal? (zmq_bind P #"tcp://*:6555") (void))
     (check-equal? (zmq_connect Q #"tcp://localhost:6555") (void))
 
-    (check-getsockopt   =    P 'AFFINITY      0)
-    (check-getsockopt equal? P 'IDENTITY      #"")
-    (check-getsockopt   >    P 'FD            2)
-    (check-getsockopt equal? P 'EVENTS        null)
-    (check-getsockopt equal? P 'TYPE          'REP)
-    (check-getsockopt   =    P 'BACKLOG       100)
-    (check-getsockopt  eq?   P 'IMMEDIATE     #f)
-    (check-getsockopt equal? P 'LAST_ENDPOINT #"tcp://0.0.0.0:6555")
-    (check-getsockopt equal? Q 'LAST_ENDPOINT #"tcp://localhost:6555")
-    (check-getsockopt  eq?   P 'IPV6          #f)
+    (check-getsockopt P 'AFFINITY        =    0)
+    (check-getsockopt P 'IDENTITY      equal? #"")
+    (check-getsockopt P 'FD              >    2)
+    (check-getsockopt P 'EVENTS        equal? null)
+    (check-getsockopt P 'TYPE          equal? 'REP)
+    (check-getsockopt P 'LINGER          =    -1)
+    (check-getsockopt P 'BACKLOG         =    100)
+    (check-getsockopt P 'RCVHWM          =    1000)
+    (check-getsockopt P 'LAST_ENDPOINT equal? #"tcp://0.0.0.0:6555")
+    (check-getsockopt Q 'LAST_ENDPOINT equal? #"tcp://localhost:6555")
+    (check-getsockopt P 'IMMEDIATE      eq?   #f)
+    (check-getsockopt P 'IPV6           eq?   #f)
 
-    (check-true (= (bytes-length (zmq_getsockopt P 'CURVE_PUBLICKEY     )) 32))
-    (check-true (= (bytes-length (zmq_getsockopt P 'CURVE_PUBLICKEY->BIN)) 32))
-    (check-true (= (bytes-length (zmq_getsockopt P 'CURVE_PUBLICKEY->Z85)) 40))
+    (check-getsockopt-len P 'CURVE_PUBLICKEY      32)
+    (check-getsockopt-len P 'CURVE_PUBLICKEY->BIN 32)
+    (check-getsockopt-len P 'CURVE_PUBLICKEY->Z85 40)
 
-    (check-true (= (bytes-length (zmq_getsockopt P 'CURVE_PRIVATEKEY     )) 32))
-    (check-true (= (bytes-length (zmq_getsockopt P 'CURVE_PRIVATEKEY->BIN)) 32))
-    (check-true (= (bytes-length (zmq_getsockopt P 'CURVE_PRIVATEKEY->Z85)) 40))
+    (check-getsockopt-len P 'CURVE_PRIVATEKEY      32)
+    (check-getsockopt-len P 'CURVE_PRIVATEKEY->BIN 32)
+    (check-getsockopt-len P 'CURVE_PRIVATEKEY->Z85 40)
 
-    (check-true (= (bytes-length (zmq_getsockopt P 'CURVE_SERVERKEY     )) 32))
-    (check-true (= (bytes-length (zmq_getsockopt P 'CURVE_SERVERKEY->BIN)) 32))
-    (check-true (= (bytes-length (zmq_getsockopt P 'CURVE_SERVERKEY->Z85)) 40))
+    (check-getsockopt-len P 'CURVE_SERVERKEY      32)
+    (check-getsockopt-len P 'CURVE_SERVERKEY->BIN 32)
+    (check-getsockopt-len P 'CURVE_SERVERKEY->Z85 40)
 
     (check-true (= (zmq_getsockopt P 'HANDSHAKE_IVL) 30000))
 
@@ -287,7 +295,10 @@
 ;; -- zmq_setsockopt --
 
 (define _set_socket_option
-  (_enum '(AFFINITY = 4)))
+  (_enum '(AFFINITY = 4
+           LINGER   = 17
+           RCVHWM   = 24
+           )))
 
 (define-syntax (define-setsockopt->ctype stx)
   (syntax-case stx ()
@@ -302,22 +313,33 @@
                   -> (when (= rc -1) (croak 'zmq_setsockopt)))))]))
 
 (define-setsockopt->ctype uint64)
+(define-setsockopt->ctype fixint)
 
 (define (zmq_setsockopt obj name val)
   (case name
     [(AFFINITY) (setsockopt->uint64 obj name val)]
+    [(LINGER  ) (setsockopt->fixint obj name val)]
+    [(BACKLOG ) (setsockopt->fixint obj name val)]
+    [(RCVHWM  ) (setsockopt->fixint obj name val)]
     ))
 
 (provide zmq_setsockopt)
 
 (module+ test
+  (define-syntax-rule (check-setsockopt obj name binop val)
+    (begin
+      (check equal? (zmq_setsockopt obj name val) (void))
+      (check binop (zmq_getsockopt obj name) val)))
+
   (let* ([C (zmq_ctx_new)]
          [S (zmq_socket C 'REP)])
-    (check-equal? (zmq_setsockopt S 'AFFINITY 3) (void))
-    (check-true (= (zmq_getsockopt S 'AFFINITY) 3))))
+    (check-setsockopt S 'AFFINITY = 3)
+    (check-setsockopt S 'LINGER   = 30)
+    (check-setsockopt S 'RCVHWM   = 500)
+    ))
 
 ;; ---------------------------------------------------------------------------
-;; message
+;; buffer
 
 (define _send_flags
   (_bitmask '(DONTWAIT = 1
@@ -325,12 +347,6 @@
 
 (define _recv_flags
   (_bitmask '(DONTWAIT = 1)))
-
-;; (define-syntax-rule (define-zmq-buf name flags)
-;;   (define-zmq-check-ret name
-;;     _socket (msg : _bytes) (_size = (bytes-length msg)) flags))
-
-;; (define-zmq-buf zmq_send _)
 
 (define-zmq-check-ret zmq_send
   _socket (msg : _bytes) (_size = (bytes-length msg)) _send_flags)
@@ -340,6 +356,33 @@
 
 (define-zmq-check-ret zmq_send_const
   _socket (msg : _bytes) (_size = (bytes-length msg)) _send_flags)
+
+(provide zmq_send zmq_recv zmq_send_const)
+
+(module+ test
+  (let* ([C (zmq_ctx_new)]
+         [P (zmq_socket C 'REP)]
+         [Q (zmq_socket C 'REQ)]
+         [buf (make-bytes 10)])
+    (check-equal? (zmq_bind P #"inproc://test1") (void))
+    (check-equal? (zmq_connect Q #"inproc://test1") (void))
+    (check = (zmq_send Q #"abc123" null) 6)
+    (check = (zmq_recv P buf null) 6)
+    (check-equal? buf #"abc123\0\0\0\0")
+    (check-equal? (zmq_close Q) (void))
+    (check-equal? (zmq_close P) (void))
+    (check-equal? (zmq_ctx_shutdown C) (void))
+    (check-equal? (zmq_ctx_term C) (void))))
+
+
+;; ---------------------------------------------------------------------------
+;; message
+
+(struct msg (obj) #:property prop:cpointer 0)
+
+(define _msg (_cpointer 'msg))
+
+(define-zmq zmq_msg_init (_fun (_ptr io _msg) -> _int))
 
 ;; ----
 
@@ -352,40 +395,6 @@
   ;;   ))
 
 ;; ---------------------------------------------------------------------------
-
-;; (module+ test
-;;   (require racket/function
-;;            rackunit)
-
-;;   (let* ([C (zmq_ctx_new)]
-;;          [S (zmq_socket C 4)])
-;;     (check-pred (curryr > 2) (zmq_getsockopt S 14))
-;;     (check = (zmq_getsockopt S 42) 0)
-;;     (check = (zmq_getsockopt S 17) -1)
-;;     (check = (zmq_getsockopt S 24) 1000)
-
-;;     (check-equal? (zmq_setsockopt S 17 30) (void))
-;;     (check-equal? (zmq_setsockopt S 24 500) (void))
-
-;;     (check = (zmq_getsockopt S 17) 30)
-;;     (check = (zmq_getsockopt S 24) 500)
-;;     (check-equal? (zmq_close S) (void))
-;;     (check-equal? (zmq_ctx_shutdown C) (void))
-;;     (check-equal? (zmq_ctx_term C) (void)))
-
-;;   (let* ([C (zmq_ctx_new)]
-;;          [P (zmq_socket C 4)]
-;;          [Q (zmq_socket C 3)]
-;;          [buf (make-bytes 10)])
-;;     (check-equal? (zmq_bind P #"inproc://test1") (void))
-;;     (check-equal? (zmq_connect Q #"inproc://test1") (void))
-;;     (check = (zmq_send Q #"abc123" 0) 6)
-;;     (check = (zmq_recv P buf 0) 6)
-;;     (check-equal? buf #"abc123\0\0\0\0")
-;;     (check-equal? (zmq_close Q) (void))
-;;     (check-equal? (zmq_close P) (void))
-;;     (check-equal? (zmq_ctx_shutdown C) (void))
-;;     (check-equal? (zmq_ctx_term C) (void)))
 
 ;;   (let* ([C (zmq_ctx_new)]
 ;;          [P (zmq_socket C 4)]
