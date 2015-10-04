@@ -22,12 +22,6 @@
   (define-zmq name
     (_efun args ...
            -> (rc : _fixnum)
-           -> (when (= rc -1) (croak 'name)))))
-
-(define-syntax-rule (define-zmq-check-ret name args ...)
-  (define-zmq name
-    (_efun args ...
-           -> (rc : _fixnum)
            -> (if (= rc -1) (croak 'name) rc))))
 
 ;; ---------------------------------------------------------------------------
@@ -45,13 +39,15 @@
 ;; version
 
 (define-zmq zmq_version
-  (_fun (major : (_ptr o _fixint))
-        (minor : (_ptr o _fixint))
-        (patch : (_ptr o _fixint))
-        -> _void
-        -> (values major minor patch)))
+  (_fun (_box _fixint) (_box _fixint) (_box _fixint) -> _void))
 
 (provide zmq_version)
+
+(module+ test
+  (let ([major (box -1)]
+        [minor (box -1)]
+        [patch (box -1)])
+    (check equal? (zmq_version major minor patch) (void))))
 
 ;; ---------------------------------------------------------------------------
 ;; context
@@ -79,7 +75,7 @@
            IPV6                = 42)
          _fixint))
 
-(define-zmq-check-ret zmq_ctx_get _context _ctx_get_option)
+(define-zmq-check zmq_ctx_get _context _ctx_get_option)
 (define-zmq-check zmq_ctx_set _context _ctx_set_option _fixint)
 (define-zmq-check zmq_ctx_shutdown _context)
 (define-zmq-check zmq_ctx_term _context)
@@ -94,19 +90,19 @@
     (check = (zmq_ctx_get C 'SOCKET_LIMIT) 65535)
     (check = (zmq_ctx_get C 'IPV6) 0)
 
-    (check-equal? (zmq_ctx_set C 'IO_THREADS 3) (void))
-    (check-equal? (zmq_ctx_set C 'MAX_SOCKETS 511) (void))
-    (check-equal? (zmq_ctx_set C 'THREAD_PRIORITY 4095) (void))
-    (check-equal? (zmq_ctx_set C 'THREAD_SCHED_POLICY 98) (void))
-    (check-equal? (zmq_ctx_set C 'IPV6 1) (void))
+    (check = (zmq_ctx_set C 'IO_THREADS 3) 0)
+    (check = (zmq_ctx_set C 'MAX_SOCKETS 511) 0)
+    (check = (zmq_ctx_set C 'THREAD_PRIORITY 4095) 0)
+    (check = (zmq_ctx_set C 'THREAD_SCHED_POLICY 98) 0)
+    (check = (zmq_ctx_set C 'IPV6 1) 0)
 
     (check = (zmq_ctx_get C 'IO_THREADS) 3)
     (check = (zmq_ctx_get C 'MAX_SOCKETS) 511)
     (check = (zmq_ctx_get C 'SOCKET_LIMIT) 65535)
     (check = (zmq_ctx_get C 'IPV6) 1)
 
-    (check-equal? (zmq_ctx_shutdown C) (void))
-    (check-equal? (zmq_ctx_term C) (void))))
+    (check = (zmq_ctx_shutdown C) 0)
+    (check = (zmq_ctx_term C) 0)))
 
 ;; ---------------------------------------------------------------------------
 ;; socket
@@ -259,8 +255,8 @@
   (let* ([C (zmq_ctx_new)]
          [P (zmq_socket C 'REP)]
          [Q (zmq_socket C 'REQ)])
-    (check-equal? (zmq_bind P #"tcp://*:6555") (void))
-    (check-equal? (zmq_connect Q #"tcp://localhost:6555") (void))
+    (check = (zmq_bind P #"tcp://*:6555") 0)
+    (check = (zmq_connect Q #"tcp://localhost:6555") 0)
 
     (check-getsockopt P 'AFFINITY        =    0)
     (check-getsockopt P 'IDENTITY      equal? #"")
@@ -287,10 +283,11 @@
     (check-getsockopt-len P 'CURVE_SERVERKEY->BIN 32)
     (check-getsockopt-len P 'CURVE_SERVERKEY->Z85 40)
 
-    (check-true (= (zmq_getsockopt P 'HANDSHAKE_IVL) 30000))
+    (check = (zmq_getsockopt P 'HANDSHAKE_IVL) 30000)
 
-    (check-equal? (zmq_close P) (void))
-    (check-equal? (zmq_close Q) (void))))
+    (check = (zmq_close P) 0)
+    (check = (zmq_close Q) 0)
+    ))
 
 ;; -- zmq_setsockopt --
 
@@ -310,7 +307,7 @@
                   (val : (_ptr i _type))
                   (_size = (ctype-sizeof _type))
                   -> (rc : _fixint)
-                  -> (when (= rc -1) (croak 'zmq_setsockopt)))))]))
+                  -> (if (= rc -1) (croak 'zmq_setsockopt) rc))))]))
 
 (define-setsockopt->ctype uint64)
 (define-setsockopt->ctype fixint)
@@ -328,7 +325,7 @@
 (module+ test
   (define-syntax-rule (check-setsockopt obj name binop val)
     (begin
-      (check equal? (zmq_setsockopt obj name val) (void))
+      (check = (zmq_setsockopt obj name val) 0)
       (check binop (zmq_getsockopt obj name) val)))
 
   (let* ([C (zmq_ctx_new)]
@@ -348,13 +345,13 @@
 (define _recv_flags
   (_bitmask '(DONTWAIT = 1)))
 
-(define-zmq-check-ret zmq_send
+(define-zmq-check zmq_send
   _socket (msg : _bytes) (_size = (bytes-length msg)) _send_flags)
 
-(define-zmq-check-ret zmq_recv
+(define-zmq-check zmq_recv
   _socket (msg : _bytes) (_size = (bytes-length msg)) _recv_flags)
 
-(define-zmq-check-ret zmq_send_const
+(define-zmq-check zmq_send_const
   _socket (msg : _bytes) (_size = (bytes-length msg)) _send_flags)
 
 (provide zmq_send zmq_recv zmq_send_const)
@@ -364,15 +361,16 @@
          [P (zmq_socket C 'REP)]
          [Q (zmq_socket C 'REQ)]
          [buf (make-bytes 10)])
-    (check-equal? (zmq_bind P #"inproc://test1") (void))
-    (check-equal? (zmq_connect Q #"inproc://test1") (void))
+    (check = (zmq_bind P #"inproc://test1") 0)
+    (check = (zmq_connect Q #"inproc://test1") 0)
     (check = (zmq_send Q #"abc123" null) 6)
     (check = (zmq_recv P buf null) 6)
     (check-equal? buf #"abc123\0\0\0\0")
-    (check-equal? (zmq_close Q) (void))
-    (check-equal? (zmq_close P) (void))
-    (check-equal? (zmq_ctx_shutdown C) (void))
-    (check-equal? (zmq_ctx_term C) (void))))
+    (check = (zmq_close Q) 0)
+    (check = (zmq_close P) 0)
+    (check = (zmq_ctx_shutdown C) 0)
+    (check = (zmq_ctx_term C) 0)
+    ))
 
 ;; ---------------------------------------------------------------------------
 ;; message
@@ -399,8 +397,8 @@
 
 (define-zmq zmq_msg_size (_fun _msg-pointer -> _size))
 (define-zmq zmq_msg_data (_fun _msg-pointer -> _bytes))
-(define-zmq-check-ret zmq_msg_send _msg-pointer _socket _send_flags)
-(define-zmq-check-ret zmq_msg_recv _msg-pointer _socket _recv_flags)
+(define-zmq-check zmq_msg_send _msg-pointer _socket _send_flags)
+(define-zmq-check zmq_msg_recv _msg-pointer _socket _recv_flags)
 (define-zmq-check zmq_msg_close _msg-pointer)
 
 (provide zmq_msg_init zmq_msg_init_size zmq_msg_init_data
@@ -410,27 +408,27 @@
   (let ([M1 (make-message)]
         [M2 (make-message)]
         [M3 (make-message)])
-    (check-equal? (zmq_msg_init M1) (void))
-    (check-equal? (zmq_msg_init_size M2 512) (void))
-    (check-equal? (zmq_msg_init_data M3 #"abc" 3) (void))
+    (check = (zmq_msg_init M1) 0)
+    (check = (zmq_msg_init_size M2 512) 0)
+    (check = (zmq_msg_init_data M3 #"abc" 3) 0)
     (check = (zmq_msg_size M1) 0)
     (check = (zmq_msg_size M2) 512)
     (check = (zmq_msg_size M3) 3)
     (check-equal? (zmq_msg_data M3) #"abc")
-    (check-equal? (zmq_msg_close M1) (void))
-    (check-equal? (zmq_msg_close M2) (void))
-    (check-equal? (zmq_msg_close M3) (void)))
+    (check = (zmq_msg_close M1) 0)
+    (check = (zmq_msg_close M2) 0)
+    (check = (zmq_msg_close M3) 0))
 
   (let* ([C (zmq_ctx_new)]
          [P (zmq_socket C 'REP)]
          [Q (zmq_socket C 'REQ)]
          [M1 (make-message)]
          [M2 (make-message)])
-    (check-equal? (zmq_bind P #"inproc://msg-test") (void))
-    (check-equal? (zmq_connect Q #"inproc://msg-test") (void))
-    (check-equal? (zmq_msg_init_size M1 3) (void))
-    (check-equal? (set-message-data! M1 #"987") (void))
-    (check-equal? (zmq_msg_init M2) (void))
+    (check = (zmq_bind P #"inproc://msg-test") 0)
+    (check = (zmq_connect Q #"inproc://msg-test") 0)
+    (check = (zmq_msg_init_size M1 3) 0)
+    (set-message-data! M1 #"987")
+    (check = (zmq_msg_init M2) 0)
     (check = (zmq_msg_send M1 Q null) 3)
     (check = (zmq_msg_recv M2 P null) 3)
     (check-equal? (zmq_msg_data M2) #"987")))
