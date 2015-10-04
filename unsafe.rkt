@@ -374,15 +374,66 @@
     (check-equal? (zmq_ctx_shutdown C) (void))
     (check-equal? (zmq_ctx_term C) (void))))
 
-
 ;; ---------------------------------------------------------------------------
 ;; message
 
-(struct msg (obj) #:property prop:cpointer 0)
+(struct message (obj) #:property prop:cpointer 0)
 
-(define _msg (_cpointer 'msg))
+(define (make-message)
+  (let ([obj (malloc _msg 'raw)])
+    (set-cpointer-tag! obj msg-tag)
+    (message obj)))
 
-(define-zmq zmq_msg_init (_fun (_ptr io _msg) -> _int))
+(define (set-message-data! M buf)
+  (memcpy (zmq_msg_data M) buf (min (bytes-length buf) (zmq_msg_size M))))
+
+(define-cstruct _msg ([_ (_array _uint8 64)]))
+
+(define-zmq-check zmq_msg_init _msg-pointer)
+(define-zmq-check zmq_msg_init_size _msg-pointer _size)
+
+(define-zmq-check zmq_msg_init_data
+  _msg-pointer _pointer _size
+  ((_fun _pointer _pointer -> _void) = (λ _ (void)))
+  (_pointer = (cast 0 _uint64 _pointer)))
+
+(define-zmq zmq_msg_size (_fun _msg-pointer -> _size))
+(define-zmq zmq_msg_data (_fun _msg-pointer -> _bytes))
+(define-zmq-check-ret zmq_msg_send _msg-pointer _socket _send_flags)
+(define-zmq-check-ret zmq_msg_recv _msg-pointer _socket _recv_flags)
+(define-zmq-check zmq_msg_close _msg-pointer)
+
+(provide zmq_msg_init zmq_msg_init_size zmq_msg_init_data
+         zmq_msg_size zmq_msg_data zmq_msg_send zmq_msg_recv zmq_msg_close)
+
+(module+ test
+  (let ([M1 (make-message)]
+        [M2 (make-message)]
+        [M3 (make-message)])
+    (check-equal? (zmq_msg_init M1) (void))
+    (check-equal? (zmq_msg_init_size M2 512) (void))
+    (check-equal? (zmq_msg_init_data M3 #"abc" 3) (void))
+    (check = (zmq_msg_size M1) 0)
+    (check = (zmq_msg_size M2) 512)
+    (check = (zmq_msg_size M3) 3)
+    (check-equal? (zmq_msg_data M3) #"abc")
+    (check-equal? (zmq_msg_close M1) (void))
+    (check-equal? (zmq_msg_close M2) (void))
+    (check-equal? (zmq_msg_close M3) (void)))
+
+  (let* ([C (zmq_ctx_new)]
+         [P (zmq_socket C 'REP)]
+         [Q (zmq_socket C 'REQ)]
+         [M1 (make-message)]
+         [M2 (make-message)])
+    (check-equal? (zmq_bind P #"inproc://msg-test") (void))
+    (check-equal? (zmq_connect Q #"inproc://msg-test") (void))
+    (check-equal? (zmq_msg_init_size M1 3) (void))
+    (check-equal? (set-message-data! M1 #"987") (void))
+    (check-equal? (zmq_msg_init M2) (void))
+    (check = (zmq_msg_send M1 Q null) 3)
+    (check = (zmq_msg_recv M2 P null) 3)
+    (check-equal? (zmq_msg_data M2) #"987")))
 
 ;; ----
 
