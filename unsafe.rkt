@@ -21,7 +21,7 @@
 (define-syntax-rule (define-zmq-check name args ...)
   (define-zmq name
     (_efun args ...
-           -> (rc : _fixnum)
+           -> (rc : _fixint)
            -> (if (= rc -1) (croak 'name) rc))))
 
 ;; ---------------------------------------------------------------------------
