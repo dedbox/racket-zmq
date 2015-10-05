@@ -85,7 +85,7 @@
 (provide zmq_ctx_new zmq_ctx_get zmq_ctx_set zmq_ctx_shutdown zmq_ctx_term)
 
 (module+ test
-  (let* ([C (zmq_ctx_new)])
+  (let ([C (zmq_ctx_new)])
     (check = (zmq_ctx_get C 'IO_THREADS) 1)
     (check = (zmq_ctx_get C 'MAX_SOCKETS) 1023)
     (check = (zmq_ctx_get C 'SOCKET_LIMIT) 65535)

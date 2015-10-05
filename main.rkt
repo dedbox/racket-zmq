@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require racket/format
+(require ffi/unsafe
+         racket/format
          zmq/unsafe)
 
 (module+ test (require rackunit))
@@ -9,8 +10,11 @@
 ;; version
 
 (define (zmq-version)
-  (define-values (major minor patch) (zmq_version))
-  (~a major "." minor "." patch))
+  (let ([major (box -1)]
+        [minor (box -1)]
+        [patch (box -1)])
+    (zmq_version major minor patch)
+    (~a (unbox major) "." (unbox minor) "." (unbox patch))))
 
 (provide zmq-version)
 
@@ -20,30 +24,52 @@
 ;; ---------------------------------------------------------------------------
 ;; context
 
-(define zmq-ctx-new zmq_ctx_new)
-(define zmq-ctx-get zmq_ctx_get)
-(define zmq-ctx-set zmq_ctx_set)
-(define zmq-ctx-shutdown zmq_ctx_shutdown)
-(define zmq-ctx-term zmq_ctx_term)
+(struct context (ptr) #:property prop:cpointer 0)
 
-(provide zmq-ctx-new zmq-ctx-get zmq-ctx-set zmq-ctx-shutdown zmq-ctx-term)
+(define (make-context)
+  (context (zmq_ctx_new)))
+
+(define (context-get name)
+  (zmq_ctx_get (current-context) name))
+
+(define (context-set! name value)
+  (void (zmq_ctx_set (current-context) name value)))
+
+(define (context-shutdown)
+  (void (zmq_ctx_shutdown (current-context))))
+
+(define (context-term)
+  (void (zmq_ctx_term (current-context))))
+
+;; ...
+
+(define current-context (make-parameter (make-context)))
+
+(define-syntax-rule (with-context ctx body ...)
+  (parameterize ([current-context ctx]) body ...))
+
+(define-syntax-rule (with-new-context body ...)
+  (with-context (make-context) body ...))
+
+;; ...
+
+(provide make-context context-get context-set! context-shutdown context-term
+          current-context with-context with-new-context)
 
 (module+ test
-  (let ([C (zmq-ctx-new)])
-    (check = (zmq-ctx-get C 'IO_THREADS) 1)
-    (check = (zmq-ctx-get C 'MAX_SOCKETS) 1023)
-    (check = (zmq-ctx-get C 'SOCKET_LIMIT) 65535)
-
-    (check-equal? (zmq-ctx-set C 'IO_THREADS 3) (void))
-    (check-equal? (zmq-ctx-set C 'MAX_SOCKETS 511) (void))
-    (check-equal? (zmq-ctx-set C 'THREAD_PRIORITY 4095) (void))
-    (check-equal? (zmq-ctx-set C 'THREAD_SCHED_POLICY 98) (void))
-    (check-equal? (zmq-ctx-set C 'IPV6 1) (void))
-
-    (check = (zmq-ctx-get C 'IO_THREADS) 3)
-    (check = (zmq-ctx-get C 'MAX_SOCKETS) 511)
-    (check = (zmq-ctx-get C 'SOCKET_LIMIT) 65535)
-    (check = (zmq-ctx-get C 'IPV6) 1)
-
-    (check-equal? (zmq-ctx-shutdown C) (void))
-    (check-equal? (zmq-ctx-term C) (void))))
+  (with-new-context
+   (check = (context-get 'IO_THREADS) 1)
+   (check = (context-get 'MAX_SOCKETS) 1023)
+   (check = (context-get 'SOCKET_LIMIT) 65535)
+   (check = (context-get 'IPV6) 0)
+   (check-equal? (context-set! 'IO_THREADS 3) (void))
+   (check-equal? (context-set! 'MAX_SOCKETS 511) (void))
+   (check-equal? (context-set! 'THREAD_PRIORITY 4095) (void))
+   (check-equal? (context-set! 'THREAD_SCHED_POLICY 98) (void))
+   (check-equal? (context-set! 'IPV6 1) (void))
+   (check = (context-get 'IO_THREADS) 3)
+   (check = (context-get 'MAX_SOCKETS) 511)
+   (check = (context-get 'SOCKET_LIMIT) 65535)
+   (check = (context-get 'IPV6) 1)
+   (check-equal? (context-shutdown) (void))
+   (check-equal? (context-term) (void))))
