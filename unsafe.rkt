@@ -90,18 +90,15 @@
     (check = (zmq_ctx_get C 'MAX_SOCKETS) 1023)
     (check = (zmq_ctx_get C 'SOCKET_LIMIT) 65535)
     (check = (zmq_ctx_get C 'IPV6) 0)
-
     (check = (zmq_ctx_set C 'IO_THREADS 3) 0)
     (check = (zmq_ctx_set C 'MAX_SOCKETS 511) 0)
     (check = (zmq_ctx_set C 'THREAD_PRIORITY 4095) 0)
     (check = (zmq_ctx_set C 'THREAD_SCHED_POLICY 98) 0)
     (check = (zmq_ctx_set C 'IPV6 1) 0)
-
     (check = (zmq_ctx_get C 'IO_THREADS) 3)
     (check = (zmq_ctx_get C 'MAX_SOCKETS) 511)
     (check = (zmq_ctx_get C 'SOCKET_LIMIT) 65535)
     (check = (zmq_ctx_get C 'IPV6) 1)
-
     (check = (zmq_ctx_shutdown C) 0)
     (check = (zmq_ctx_term C) 0)))
 
@@ -249,7 +246,6 @@
          [Q (zmq_socket C 'REQ)])
     (check = (zmq_bind P #"tcp://*:6555") 0)
     (check = (zmq_connect Q #"tcp://localhost:6555") 0)
-
     (check-getsockopt P 'AFFINITY        =    0)
     (check-getsockopt P 'IDENTITY      equal? #"")
     (check-getsockopt P 'FD              >    2)
@@ -262,21 +258,16 @@
     (check-getsockopt Q 'LAST_ENDPOINT equal? #"tcp://localhost:6555")
     (check-getsockopt P 'IMMEDIATE      eq?   #f)
     (check-getsockopt P 'IPV6           eq?   #f)
-
     (check-getsockopt-len P 'CURVE_PUBLICKEY      32)
     (check-getsockopt-len P 'CURVE_PUBLICKEY->BIN 32)
     (check-getsockopt-len P 'CURVE_PUBLICKEY->Z85 40)
-
     (check-getsockopt-len P 'CURVE_PRIVATEKEY      32)
     (check-getsockopt-len P 'CURVE_PRIVATEKEY->BIN 32)
     (check-getsockopt-len P 'CURVE_PRIVATEKEY->Z85 40)
-
     (check-getsockopt-len P 'CURVE_SERVERKEY      32)
     (check-getsockopt-len P 'CURVE_SERVERKEY->BIN 32)
     (check-getsockopt-len P 'CURVE_SERVERKEY->Z85 40)
-
     (check = (zmq_getsockopt P 'HANDSHAKE_IVL) 30000)
-
     (check = (zmq_close P) 0)
     (check = (zmq_close Q) 0)
     ))
@@ -383,9 +374,6 @@
 (define-zmq-check zmq_msg_init_data
   _msg-pointer _pointer _size (_fun _pointer _pointer -> _void) _pointer)
 
-(define cvoid (λ _ (void)))
-(define cnull (cast 0 _uint64 _pointer))
-
 (define-zmq zmq_msg_size (_fun _msg-pointer -> _size))
 
 (define-zmq zmq_msg_data
@@ -399,18 +387,23 @@
 (define-zmq-check zmq_msg_copy _msg-pointer _msg-pointer)
 (define-zmq-check zmq_msg_move _msg-pointer _msg-pointer)
 
+(define (alloc-msg)
+  (let ([msg (malloc _msg 'raw)])
+    (set-cpointer-tag! msg msg-tag)
+    msg))
+
+(define cvoid (λ _ (void)))
+(define cnull (cast 0 _uint64 _pointer))
+
 (provide zmq_msg_init zmq_msg_init_size zmq_msg_init_data cvoid cnull
          zmq_msg_size zmq_msg_data zmq_msg_send zmq_msg_recv zmq_msg_close
-         zmq_msg_copy zmq_msg_move)
+         zmq_msg_copy zmq_msg_move alloc-msg cvoid cnull)
 
 (module+ test
 
-  (let ([M1 (malloc _msg 'raw)]
-        [M2 (malloc _msg 'raw)]
-        [M3 (malloc _msg 'raw)])
-    (set-cpointer-tag! M1 msg-tag)
-    (set-cpointer-tag! M2 msg-tag)
-    (set-cpointer-tag! M3 msg-tag)
+  (let ([M1 (alloc-msg)]
+        [M2 (alloc-msg)]
+        [M3 (alloc-msg)])
     (check = (zmq_msg_init M1) 0)
     (check = (zmq_msg_init_size M2 512) 0)
     (check = (zmq_msg_init_data M3 #"abc" 3 cvoid cnull) 0)
@@ -425,10 +418,8 @@
   (let* ([C (zmq_ctx_new)]
          [P (zmq_socket C 'REP)]
          [Q (zmq_socket C 'REQ)]
-         [M1 (malloc _msg 'raw)]
-         [M2 (malloc _msg 'raw)])
-    (set-cpointer-tag! M1 msg-tag)
-    (set-cpointer-tag! M2 msg-tag)
+         [M1 (alloc-msg)]
+         [M2 (alloc-msg)])
     (check = (zmq_bind P #"inproc://msg-test") 0)
     (check = (zmq_connect Q #"inproc://msg-test") 0)
     (check = (zmq_msg_init_size M1 3) 0)
@@ -441,10 +432,8 @@
   (let* ([C (zmq_ctx_new)]
          [P (zmq_socket C 'REP)]
          [Q (zmq_socket C 'REQ)]
-         [M1 (malloc _msg 'raw)]
-         [M2 (malloc _msg 'raw)])
-    (set-cpointer-tag! M1 msg-tag)
-    (set-cpointer-tag! M2 msg-tag)
+         [M1 (alloc-msg)]
+         [M2 (alloc-msg)])
     (check = (zmq_msg_init M1) 0)
     (check = (zmq_msg_init_size M2 10) 0)
     (check = (zmq_msg_size M1) 0)
@@ -465,10 +454,8 @@
   (let* ([C (zmq_ctx_new)]
          [P (zmq_socket C 'REP)]
          [Q (zmq_socket C 'REQ)]
-         [M3 (malloc _msg 'raw)]
-         [M4 (malloc _msg 'raw)])
-    (set-cpointer-tag! M3 msg-tag)
-    (set-cpointer-tag! M4 msg-tag)
+         [M3 (alloc-msg)]
+         [M4 (alloc-msg)])
     (check = (zmq_msg_init_data M3 #"654mon" 6 cvoid cnull) 0)
     (check = (zmq_msg_init M4) 0)
     (check = (zmq_msg_size M3) 6)
@@ -483,12 +470,9 @@
     (check = (zmq_msg_close M3) 0)
     (check = (zmq_msg_close M4) 0))
 
-  (let ([M5 (malloc _msg 'raw)]
-        [M6 (malloc _msg 'raw)]
-        [M7 (malloc _msg 'raw)])
-    (set-cpointer-tag! M5 msg-tag)
-    (set-cpointer-tag! M6 msg-tag)
-    (set-cpointer-tag! M7 msg-tag)
+  (let ([M5 (alloc-msg)]
+        [M6 (alloc-msg)]
+        [M7 (alloc-msg)])
     (check = (zmq_msg_init_data M5 #"567vut" 6 cvoid cnull) 0)
     (check = (zmq_msg_init M6) 0)
     (check = (zmq_msg_init M7) 0)
