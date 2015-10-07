@@ -213,11 +213,11 @@
     (zmq_msg_init_data msg buf (bytes-length buf) cvoid cnull)
     (message msg)))
 
-;; (define (datum->message datum)
-;;   (let ([buf (with-output-to-bytes (λ () (write datum)))]
-;;         [msg (alloc-msg)])
-;;     (zmq_msg_init_data msg buf (bytes-length buf) cvoid cnull)
-;;     (message msg)))
+(define (datum->message datum)
+  (let ([buf (with-output-to-bytes (λ () (write datum)))]
+        [msg (alloc-msg)])
+    (zmq_msg_init_data msg buf (bytes-length buf) cvoid cnull)
+    (message msg)))
 
 (define (message-size [msg (current-message)])
   (zmq_msg_size msg))
@@ -248,6 +248,9 @@
 ;; syntax
 
 (define current-message (make-parameter #f))
+
+(define-syntax-rule (with-message msg body ...)
+  (parameterize ([current-message msg]) body ...))
 
 (define-syntax-rule (with-new-message body ...)
   (parameterize ([current-message (make-message)])
@@ -287,6 +290,9 @@
   (with-new-message-data #"abc"
     (check = (message-size) 3)
     (check-equal? (message-data) #"abc"))
+
+  (with-message (datum->message '(98 76 vut))
+    (check-equal? (message-data) #"(98 76 vut)"))
 
   (with-new-context
     (let-socket ([P 'REP] [Q 'REQ])
