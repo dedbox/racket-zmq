@@ -3,6 +3,7 @@
 (require ffi/unsafe
          racket/format
          racket/port
+         (for-syntax racket/base)
          zmq/unsafe)
 
 (module+ test (require rackunit))
@@ -52,25 +53,26 @@
   (parameterize ([current-context ctx]) body ...))
 
 (define-syntax-rule (with-new-context body ...)
-  (with-context (make-context) body ... (context-shutdown) (context-term)))
+  (with-context (make-context)
+    (begin0 (begin body ...) (context-shutdown) (context-term))))
 
 (provide current-context with-context with-new-context)
 
 (module+ test
   (with-new-context
-   (check = (context-get 'IO_THREADS) 1)
-   (check = (context-get 'MAX_SOCKETS) 1023)
-   (check = (context-get 'SOCKET_LIMIT) 65535)
-   (check = (context-get 'IPV6) 0)
-   (check-equal? (context-set! 'IO_THREADS 3) (void))
-   (check-equal? (context-set! 'MAX_SOCKETS 511) (void))
-   (check-equal? (context-set! 'THREAD_PRIORITY 4095) (void))
-   (check-equal? (context-set! 'THREAD_SCHED_POLICY 98) (void))
-   (check-equal? (context-set! 'IPV6 1) (void))
-   (check = (context-get 'IO_THREADS) 3)
-   (check = (context-get 'MAX_SOCKETS) 511)
-   (check = (context-get 'SOCKET_LIMIT) 65535)
-   (check = (context-get 'IPV6) 1)))
+    (check = (context-get 'IO_THREADS) 1)
+    (check = (context-get 'MAX_SOCKETS) 1023)
+    (check = (context-get 'SOCKET_LIMIT) 65535)
+    (check = (context-get 'IPV6) 0)
+    (check-equal? (context-set! 'IO_THREADS 3) (void))
+    (check-equal? (context-set! 'MAX_SOCKETS 511) (void))
+    (check-equal? (context-set! 'THREAD_PRIORITY 4095) (void))
+    (check-equal? (context-set! 'THREAD_SCHED_POLICY 98) (void))
+    (check-equal? (context-set! 'IPV6 1) (void))
+    (check = (context-get 'IO_THREADS) 3)
+    (check = (context-get 'MAX_SOCKETS) 511)
+    (check = (context-get 'SOCKET_LIMIT) 65535)
+    (check = (context-get 'IPV6) 1)))
 
 ;; ---------------------------------------------------------------------------
 ;; socket
@@ -109,7 +111,7 @@
     (check = (bytes-length (getsockopt name sock)) len))
 
   (with-new-context
-   (with-sockets ([P 'REP] [Q 'REQ])
+   (let-socket ([P 'REP] [Q 'REQ])
      (check-equal? (socket-bind "tcp://*:6555" P) (void))
      (check-equal? (socket-connect "tcp://localhost:6555" Q) (void))
      (check-getsockopt P 'AFFINITY        =    0)
@@ -146,15 +148,17 @@
 (define current-socket (make-parameter #f))
 
 (define-syntax-rule (with-socket sock body ...)
-  (paramterize ([current-socket sock]) body...))
+  (parameterize ([current-socket sock]) body ...))
 
 (define-syntax-rule (with-new-socket type body ...)
-  (parameterize ([current-socket (make-socket type)]) body ... (socket-close)))
+  (parameterize ([current-socket (make-socket type)])
+    (begin0 (begin body ...) (socket-close))))
 
-(define-syntax-rule (with-sockets ([name type] ...) body ...)
-  (let ([name (make-socket type)] ...) body ... (socket-close name) ...))
+(define-syntax-rule (let-socket ([name type] ...) body ...)
+  (let ([name (make-socket type)] ...)
+    (begin0 (begin body ...) (socket-close name) ...)))
 
-(provide current-socket with-socket with-new-socket with-sockets)
+(provide current-socket with-socket with-new-socket let-socket)
 
 (module+ test
   (define-syntax-rule (check-setsockopt sock name binop val)
@@ -163,7 +167,7 @@
       (check binop (getsockopt name sock) val)))
 
   (with-new-context
-   (with-sockets ([S 'REP])
+   (let-socket ([S 'REP])
      (check-setsockopt S 'AFFINITY = 3)
      (check-setsockopt S 'LINGER   = 30)
      (check-setsockopt S 'RCVHWM   = 500))))
@@ -186,7 +190,7 @@
 
 (module+ test
   (with-new-context
-   (with-sockets ([P 'REP] [Q 'REQ])
+   (let-socket ([P 'REP] [Q 'REQ])
      (check-equal? (socket-bind "inproc://test1" P) (void))
      (check-equal? (socket-connect "inproc://test1" Q) (void))
      (check = (socket-send-bytes #"abc123" null Q) 6)
@@ -205,7 +209,9 @@
     (message msg)))
 
 (define (bytes->message buf)
-  (zmq_msg_init_data))
+  (let ([msg (alloc-msg)])
+    (zmq_msg_init_data msg buf (bytes-length buf) cvoid cnull)
+    (message msg)))
 
 ;; (define (datum->message datum)
 ;;   (let ([buf (with-output-to-bytes (λ () (write datum)))]
@@ -219,6 +225,9 @@
 (define (message-data [msg (current-message)])
   (zmq_msg_data msg))
 
+(define (set-message-data! buf [msg (current-message)])
+  (memcpy (message-data msg) buf (bytes-length buf)))
+
 (define (message-send [flags null]
                       [msg (current-message)] [sock (current-socket)])
   (zmq_msg_send msg sock flags))
@@ -228,101 +237,102 @@
   (zmq_msg_recv msg sock flags))
 
 (define (message-close [msg (current-message)])
-  (zmq_msg_close msg))
+  (void (zmq_msg_close msg)))
 
 (define (message-copy from [to (current-message)])
-  (zmq_msg_copy to from))
+  (void (zmq_msg_copy to from)))
 
 (define (message-move from [to (current-message)])
-  (zmq_msg_move to from))
+  (void (zmq_msg_move to from)))
 
 ;; syntax
 
 (define current-message (make-parameter #f))
 
 (define-syntax-rule (with-new-message body ...)
-  (parameterize ([current-message (make-message)]) body ... (message-close)))
+  (parameterize ([current-message (make-message)])
+    (begin0 (begin body ...) (message-close))))
 
 (define-syntax-rule (with-new-message-size size body ...)
   (parameterize ([current-message (make-message size)])
-    body ... (message-close)))
+    (begin0 (begin body ...) (message-close))))
 
-(define-syntax-rule (with-new-message-data size body ...)
-  (parameterize ([current-message (make-message size)])
-    body ... (message-close)))
+(define-syntax-rule (with-new-message-data buf body ...)
+  (parameterize ([current-message (bytes->message buf)])
+    (begin0 (begin body ...) (message-close))))
+
+(define-for-syntax (mdef->def stx)
+  (syntax-case stx (empty size data)
+    [(name empty) #'(name (make-message))]
+    [(name size siz) #'(name (make-message siz))]
+    [(name data buf) #'(name (bytes->message buf))]))
+
+(define-for-syntax (mdef->close stx)
+  (syntax-case stx (empty size data)
+    [(name empty) #'(message-close name)]
+    [(name size _) #'(message-close name)]
+    [(name data _) #'(message-close name)]))
+
+(define-syntax (let-message stx)
+  (syntax-case stx ()
+    [(_ defs body ...)
+     (let* ([def-list (syntax-e #'defs)]
+            [defs* (datum->syntax stx (map mdef->def def-list))]
+            [closes (datum->syntax stx (map mdef->close def-list))])
+       #`(let #,defs* (begin0 (begin body ...) #,@closes)))]))
 
 (module+ test
   (with-new-message (check = (message-size) 0))
   (with-new-message-size 512 (check = (message-size) 512))
-  (with-new-message-data #"abc" (check-equal? (message-data) #"abc")))
+  (with-new-message-data #"abc"
+    (check = (message-size) 3)
+    (check-equal? (message-data) #"abc"))
 
-;;   (let* ([C (zmq_ctx_new)]
-;;          [P (zmq_socket C 'REP)]
-;;          [Q (zmq_socket C 'REQ)]
-;;          [M1 (alloc-msg)]
-;;          [M2 (alloc-msg)])
-;;     (check = (zmq_bind P #"inproc://msg-test") 0)
-;;     (check = (zmq_connect Q #"inproc://msg-test") 0)
-;;     (check = (zmq_msg_init_size M1 3) 0)
-;;     (memcpy (zmq_msg_data M1) #"987" 3)
-;;     (check = (zmq_msg_init M2) 0)
-;;     (check = (zmq_msg_send M1 Q null) 3)
-;;     (check = (zmq_msg_recv M2 P null) 3)
-;;     (check-equal? (zmq_msg_data M2) #"987"))
+  (with-new-context
+    (let-socket ([P 'REP] [Q 'REQ])
+      (check-equal? (socket-bind "inproc://message-test" P) (void))
+      (check-equal? (socket-connect "inproc://message-test" Q) (void))
 
-;;   (let* ([C (zmq_ctx_new)]
-;;          [P (zmq_socket C 'REP)]
-;;          [Q (zmq_socket C 'REQ)]
-;;          [M1 (alloc-msg)]
-;;          [M2 (alloc-msg)])
-;;     (check = (zmq_msg_init M1) 0)
-;;     (check = (zmq_msg_init_size M2 10) 0)
-;;     (check = (zmq_msg_size M1) 0)
-;;     (check = (zmq_msg_size M2) 10)
-;;     (check = (zmq_bind P #"inproc://test2") 0)
-;;     (check = (zmq_connect Q #"inproc://test2") 0)
-;;     (let ([buf (zmq_msg_data M2)])
-;;       (bytes-fill! buf 0)
-;;       (bytes-copy! buf 0 #"987zyx")
-;;       (check = (zmq_msg_send M2 Q null) 10)
-;;       (check = (zmq_msg_recv M1 P null) 10)
-;;       (check = (zmq_msg_size M1) 10)
-;;       (check-equal? (zmq_msg_data M1) #"987zyx\0\0\0\0")
-;;       (check-equal? (zmq_msg_data M2) #""))
-;;     (check = (zmq_msg_close M1) 0)
-;;     (check = (zmq_msg_close M2) 0))
+      (with-new-message
+        (with-new-message-size 3
+          (check-equal? (set-message-data! #"987") (void))
+          (check-equal? (message-data) #"987")
+          (with-socket Q (check = (message-send) 3)))
+        (with-socket P (check = (message-recv) 3))
+        (check-equal? (message-data) #"987"))
 
-;;   (let* ([C (zmq_ctx_new)]
-;;          [P (zmq_socket C 'REP)]
-;;          [Q (zmq_socket C 'REQ)]
-;;          [M3 (alloc-msg)]
-;;          [M4 (alloc-msg)])
-;;     (check = (zmq_msg_init_data M3 #"654mon" 6 cvoid cnull) 0)
-;;     (check = (zmq_msg_init M4) 0)
-;;     (check = (zmq_msg_size M3) 6)
-;;     (check = (zmq_msg_size M4) 0)
-;;     (check = (zmq_bind P #"inproc://test2") 0)
-;;     (check = (zmq_connect Q #"inproc://test2") 0)
-;;     (check = (zmq_send_const Q #"ok" 2 null) 2)
-;;     (let ([buf (make-bytes 5)])
-;;       (bytes-fill! buf 0)
-;;       (check = (zmq_recv P buf 5 null) 2)
-;;       (check-equal? buf #"ok\0\0\0"))
-;;     (check = (zmq_msg_close M3) 0)
-;;     (check = (zmq_msg_close M4) 0))
+      (let-message ([M size 10] [N empty])
+        (check = (message-size M) 10)
+        (check = (message-size N) 0)
+        (let ([buf (message-data M)])
+          (bytes-fill! buf 0)
+          (bytes-copy! buf 0 #"987zyx"))
+        (check-equal? (message-data M) #"987zyx\0\0\0\0")
+        (check-equal? (message-data N) #"")
+        (check = (message-send null M P) 10)
+        (check = (message-recv null N Q) 10)
+        (check-equal? (message-data N) #"987zyx\0\0\0\0")
+        (check-equal? (message-data M) #""))
 
-;;   (let ([M5 (alloc-msg)]
-;;         [M6 (alloc-msg)]
-;;         [M7 (alloc-msg)])
-;;     (check = (zmq_msg_init_data M5 #"567vut" 6 cvoid cnull) 0)
-;;     (check = (zmq_msg_init M6) 0)
-;;     (check = (zmq_msg_init M7) 0)
-;;     (check = (zmq_msg_copy M6 M5) 0)
-;;     (check-equal? (zmq_msg_data M6) (zmq_msg_data M5))
-;;     (check-equal? (zmq_msg_data M6) #"567vut")
-;;     (check = (zmq_msg_move M7 M6) 0)
-;;     (check-equal? (zmq_msg_data M7) (zmq_msg_data M5))
-;;     (check-equal? (zmq_msg_data M7) #"567vut")
-;;     (check = (zmq_msg_close M5) 0)
-;;     (check = (zmq_msg_close M6) 0)
-;;     (check = (zmq_msg_close M7) 0)))
+      (let-message ([M data #"654mon"] [N1 empty] [N2 empty])
+        (check = (message-size M) 6)
+        (check = (message-size N1) 0)
+        (check = (message-size N2) 0)
+        (check-equal? (message-data M) #"654mon")
+        (check-equal? (message-data N1) #"")
+        (check-equal? (message-data N2) #"")
+        (check-equal? (message-copy M N1) (void))
+        (check = (message-size M) 6)
+        (check = (message-size N1) 6)
+        (check = (message-size N2) 0)
+        (check-equal? (message-data M) #"654mon")
+        (check-equal? (message-data N1) #"654mon")
+        (check-equal? (message-data N2) #"")
+        (check-equal? (message-move M N2) (void))
+        (check = (message-size M) 0)
+        (check = (message-size N1) 6)
+        (check = (message-size N2) 6)
+        (check-equal? (message-data M) #"")
+        (check-equal? (message-data N1) #"654mon")
+        (check-equal? (message-data N2) #"654mon"))
+      )))
