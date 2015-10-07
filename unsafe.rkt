@@ -388,7 +388,7 @@
 (define-zmq-check zmq_msg_move _msg-pointer _msg-pointer)
 
 (define (alloc-msg)
-  (let ([msg (malloc _msg 'raw)])
+  (let ([msg (malloc _msg 'atomic)])
     (set-cpointer-tag! msg msg-tag)
     msg))
 
