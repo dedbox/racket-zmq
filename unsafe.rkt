@@ -33,7 +33,9 @@
 (define-zmq zmq_strerror (_fun _fixint -> _string))
 
 (define (croak caller)
-  (error caller (zmq_strerror (saved-errno))))
+  (if (= (saved-errno) 11)
+      (raise 'AGAIN)
+      (error caller (zmq_strerror (saved-errno)))))
 
 ;; ---------------------------------------------------------------------------
 ;; version
