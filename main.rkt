@@ -190,16 +190,16 @@
 
 (module+ test
   (with-new-context
-   (let-socket ([P 'REP] [Q 'REQ])
-     (check-equal? (socket-bind "inproc://test1" P) (void))
-     (check-equal? (socket-connect "inproc://test1" Q) (void))
-     (check = (socket-send-bytes #"abc123" null Q) 6)
-     (check-equal? (socket-recv-bytes 10 null P) #"abc123")
-     (check = (socket-send-string "ok" null P) 2)
-     (check-equal? (socket-recv-bytes 5 null Q) #"ok"))))
+    (let-socket ([P 'REP] [Q 'REQ])
+      (check-equal? (socket-bind "inproc://test1" P) (void))
+      (check-equal? (socket-connect "inproc://test1" Q) (void))
+      (check = (socket-send-bytes #"abc123" null Q) 6)
+      (check-equal? (socket-recv-bytes 10 null P) #"abc123")
+      (check = (socket-send-string "ok" null P) 2)
+      (check-equal? (socket-recv-bytes 5 null Q) #"ok"))))
 
 ;; ---------------------------------------------------------------------------
-;; message
+;; message (internal)
 
 (struct message (ptr) #:property prop:cpointer 0)
 
@@ -210,12 +210,6 @@
 
 (define (bytes->message buf)
   (let ([msg (alloc-msg)])
-    (zmq_msg_init_data msg buf (bytes-length buf) cvoid cnull)
-    (message msg)))
-
-(define (datum->message datum)
-  (let ([buf (with-output-to-bytes (λ () (write datum)))]
-        [msg (alloc-msg)])
     (zmq_msg_init_data msg buf (bytes-length buf) cvoid cnull)
     (message msg)))
 
@@ -342,3 +336,38 @@
         (check-equal? (message-data N1) #"654mon")
         (check-equal? (message-data N2) #"654mon"))
       )))
+
+;; ---------------------------------------------------------------------------
+;; messaging (external)
+
+(define (socket-send obj [flags null] [sock (current-socket)])
+  (message-send flags (datum->message obj) sock))
+
+(define (datum->message obj)
+  (bytes->message (with-output-to-bytes (λ () (write obj)))))
+
+(define (socket-recv [flags null] [sock (current-socket)])
+  (let-message ([msg empty])
+    (message-recv flags msg sock)
+    (with-input-from-bytes (message-data msg) read)))
+
+(provide socket-send socket-recv)
+
+(module+ test
+  (with-new-context
+    (let-socket ([P 'REP] [Q 'REQ])
+      (socket-bind "inproc://messaging-test" P)
+      (socket-connect "inproc://messaging-test" Q)
+      (check = (socket-send '(1 (2 . 3) four) null Q) 16)
+      (check-equal? (socket-recv null P) '(1 (2 . 3) four)))))
+
+;; ---------------------------------------------------------------------------
+;; concurrency
+
+(module+ test
+  (with-new-context
+    (let-socket ([P 'REP] [Q 'REQ])
+      (socket-bind "inproc://concurrency-test" P)
+      (socket-connect "inproc://concurrency-test" Q)
+      (thread (λ () (sleep 30) (socket-send 'ok null Q)))
+      (check-equal? (sync P) 'ok))))
