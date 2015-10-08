@@ -77,10 +77,19 @@
 ;; ---------------------------------------------------------------------------
 ;; socket
 
-(struct socket (ptr) #:property prop:cpointer 0)
+(define (socket-recv-evt [sock (current-socket)])
+  (thread (λ ()
+            (let retry ()
+              (with-handlers* ([symbol? (λ _ (sleep 0) (retry))])
+                (channel-put (socket-ch sock) (socket-recv 'DONTWAIT sock))))))
+  (socket-ch sock))
+
+(struct socket (ptr ch)
+        #:property prop:cpointer 0
+        #:property prop:evt socket-recv-evt)
 
 (define (make-socket type [ctx (current-context)])
-  (socket (zmq_socket ctx type)))
+  (socket (zmq_socket ctx type) (make-channel)))
 
 (define (socket-close [sock (current-socket)])
   (void (zmq_close sock)))
