@@ -7,3 +7,5 @@
 (define pkg-desc "Description Here")
 (define version "0.0")
 (define pkg-authors '(eric))
+
+(define pre-install-collection "private/install.rkt")

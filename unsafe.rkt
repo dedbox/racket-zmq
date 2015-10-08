@@ -1,10 +1,11 @@
 #lang racket/base
 
-(require (for-syntax racket/base
-                     racket/syntax)
-         ffi/unsafe
+(require ffi/unsafe
          ffi/unsafe/define
-         racket/function)
+         (for-syntax racket/base)
+         racket/function
+         (for-syntax racket/syntax)
+         zmq/private/ext)
 
 (module+ test (require rackunit))
 
@@ -33,7 +34,7 @@
 (define-zmq zmq_strerror (_fun _fixint -> _string))
 
 (define (croak caller)
-  (if (= (saved-errno) 11)
+  (if (= (saved-errno) EAGAIN)
       (raise 'AGAIN)
       (error caller (zmq_strerror (saved-errno)))))
 
