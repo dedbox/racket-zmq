@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require ffi/unsafe
+(require ffi/cvector
+         ffi/unsafe
          ffi/unsafe/define
          (for-syntax racket/base)
          racket/function
@@ -209,6 +210,8 @@
   (subbytes (getsockopt->char* obj name (make-bytes 41)) 0 40))
 
 (define _event_state (_bitmask '(POLLIN POLLOUT POLERR)))
+
+(define _event_state_short (_bitmask '(POLLIN POLLOUT POLERR) _short))
 
 (define (zmq_getsockopt obj name)
   (case name
@@ -497,3 +500,41 @@
   ;;   ;; (check-exn exn:fail? (λ () (zmq_getsockopt S 'GSSAPI_PLAINTEXT)))
   ;;   ;; (check-exn exn:fail? (λ () (zmq_getsockopt S 'GSSAPI_PRINCIPAL)))
   ;;   ))
+
+;; ---------------------------------------------------------------------------
+;; events
+
+(define-cstruct _pollitem ([socket  _socket]
+                           [fd      _fixint]
+                           [events  _event_state_short]
+                           [revents _event_state_short]))
+
+(define-syntax-rule (pollitems [sock flags] ...)
+  (cvector _pollitem (make-pollitem sock 0 flags null) ...))
+
+(define (pollitems-revents items k)
+  (pollitem-revents (cvector-ref items k)))
+
+(define (zmq_poll items nitems timeout)
+  (zmq_poll* (cvector-ptr items) nitems timeout))
+
+(provide pollitems pollitems-revents zmq_poll)
+
+(module+ test
+  (let* ([C (zmq_ctx_new)]
+         [P (zmq_socket C 'REP)]
+         [Q (zmq_socket C 'REQ)]
+         [s (thread (λ ()
+                      (check = (zmq_bind P #"inproc://poll-test") 0)
+                      (let ([items (pollitems [P 'POLLIN])]
+                            [buf (make-bytes 10)])
+                        (bytes-fill! buf 0)
+                        (check = (zmq_poll items 1 -1) 1)
+                        (check = (zmq_recv P buf 10 null) 5)
+                        (check-equal? buf #"PING!\0\0\0\0\0"))))]
+         [c (thread (λ ()
+                      (check = (zmq_connect Q #"inproc://poll-test") 0)
+                      (sleep 0.1)
+                      (check = (zmq_send_const Q #"PING!" 5 null) 5)))])
+    (thread-wait s)
+    (thread-wait c)))

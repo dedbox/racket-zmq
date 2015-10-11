@@ -79,9 +79,9 @@
 
 (define (socket-recv-evt [sock (current-socket)])
   (thread (λ ()
-            (let retry ()
-              (with-handlers* ([symbol? (λ _ (sleep 0) (retry))])
-                (channel-put (socket-ch sock) (socket-recv 'DONTWAIT sock))))))
+            (let ([items (pollitems [sock 'POLLIN])])
+              (zmq_poll (pollitems [sock 'POLLIN]) 1 -1)
+              (channel-put (socket-ch sock) (socket-recv 'DONTWAIT sock)))))
   (socket-ch sock))
 
 (struct socket (ptr ch)
@@ -371,12 +371,37 @@
       (check-equal? (socket-recv null P) '(1 (2 . 3) four)))))
 
 ;; ---------------------------------------------------------------------------
-;; concurrency
+;; events
 
 (module+ test
+  (define (sync-server)
+    (with-new-socket 'REP
+      (socket-bind "inproc://sync-test")
+      (check-equal? (sync (socket-recv-evt)) 'PING!)))
+
+  (define (sync-client)
+    (with-new-socket 'REQ
+      (socket-connect "inproc://sync-test")
+      (sleep 0.1)
+      (socket-send 'PING!)))
+
   (with-new-context
-    (let-socket ([P 'REP] [Q 'REQ])
-      (socket-bind "inproc://concurrency-test" P)
-      (socket-connect "inproc://concurrency-test" Q)
-      (thread (λ () (sleep 30) (socket-send 'ok null Q)))
-      (check-equal? (sync P) 'ok))))
+    (let ([server (thread sync-server)]
+          [client (thread sync-client)])
+      (thread-wait server)
+      (thread-wait client))
+
+    (let ([server (thread sync-server)]
+          [client (thread sync-client)])
+      (thread-wait client)
+      (thread-wait server))
+
+    (let ([server (thread sync-client)]
+          [client (thread sync-server)])
+      (thread-wait client)
+      (thread-wait server))
+
+    (let ([server (thread sync-client)]
+          [client (thread sync-server)])
+      (thread-wait server)
+      (thread-wait client))))

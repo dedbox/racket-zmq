@@ -10,7 +10,7 @@
                "ext.c"
                "."
                null
-               null
+               '("zmq")
                null
                null
                null
