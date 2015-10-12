@@ -51,6 +51,22 @@
     (check = (zmq_msg_close M2) 0)
     (check = (zmq_msg_close M3) 0))
 
+  (let ([M5 (alloc-msg)]
+        [M6 (alloc-msg)]
+        [M7 (alloc-msg)])
+    (check = (zmq_msg_init_data M5 #"567vut" 6 cvoid cnull) 0)
+    (check = (zmq_msg_init M6) 0)
+    (check = (zmq_msg_init M7) 0)
+    (check = (zmq_msg_copy M6 M5) 0)
+    (check-equal? (zmq_msg_data M6) (zmq_msg_data M5))
+    (check-equal? (zmq_msg_data M6) #"567vut")
+    (check = (zmq_msg_move M7 M6) 0)
+    (check-equal? (zmq_msg_data M7) (zmq_msg_data M5))
+    (check-equal? (zmq_msg_data M7) #"567vut")
+    (check = (zmq_msg_close M5) 0)
+    (check = (zmq_msg_close M6) 0)
+    (check = (zmq_msg_close M7) 0))
+
   (let* ([C (zmq_ctx_new)]
          [P (zmq_socket C 'REP)]
          [Q (zmq_socket C 'REQ)]
@@ -104,20 +120,4 @@
       (check = (zmq_recv P buf 5 null) 2)
       (check-equal? buf #"ok\0\0\0"))
     (check = (zmq_msg_close M3) 0)
-    (check = (zmq_msg_close M4) 0))
-
-  (let ([M5 (alloc-msg)]
-        [M6 (alloc-msg)]
-        [M7 (alloc-msg)])
-    (check = (zmq_msg_init_data M5 #"567vut" 6 cvoid cnull) 0)
-    (check = (zmq_msg_init M6) 0)
-    (check = (zmq_msg_init M7) 0)
-    (check = (zmq_msg_copy M6 M5) 0)
-    (check-equal? (zmq_msg_data M6) (zmq_msg_data M5))
-    (check-equal? (zmq_msg_data M6) #"567vut")
-    (check = (zmq_msg_move M7 M6) 0)
-    (check-equal? (zmq_msg_data M7) (zmq_msg_data M5))
-    (check-equal? (zmq_msg_data M7) #"567vut")
-    (check = (zmq_msg_close M5) 0)
-    (check = (zmq_msg_close M6) 0)
-    (check = (zmq_msg_close M7) 0)))
+    (check = (zmq_msg_close M4) 0)))
