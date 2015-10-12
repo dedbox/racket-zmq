@@ -1,61 +1,18 @@
 #lang racket/base
 
+(require zmq/unsafe/version)
+
+(provide [all-from-out zmq/unsafe/version])
+
 (require ffi/cvector
          ffi/unsafe
-         ffi/unsafe/define
-         (for-syntax racket/base)
          racket/function
-         (for-syntax racket/syntax)
-         zmq/private/ext)
+         zmq/private/ext
+         zmq/unsafe/define
+         [for-syntax racket/base
+                     racket/syntax])
 
 (module+ test (require rackunit))
-
-;; ---------------------------------------------------------------------------
-;; library loader
-
-(define zmq-lib (ffi-lib "libzmq"))
-
-(define-ffi-definer define-zmq zmq-lib)
-
-(define-syntax-rule (define-zmq-alias (alias actual) def)
-  (define alias (get-ffi-obj 'actual zmq-lib def)))
-
-(define-syntax-rule (define-zmq-check name args ...)
-  (define-zmq name
-    (_efun args ...
-           -> (rc : _fixint)
-           -> (if (= rc -1) (croak 'name) rc))))
-
-;; ---------------------------------------------------------------------------
-;; error handling
-
-(define-syntax-rule (_efun args ...)
-  (_fun #:save-errno 'posix args ...))
-
-(define-zmq zmq_strerror (_fun _fixint -> _string))
-
-(define (croak caller)
-  (if (= (saved-errno) EAGAIN)
-      (raise 'AGAIN)
-      (error caller (zmq_strerror (saved-errno)))))
-
-;; ---------------------------------------------------------------------------
-;; version
-
-(define-zmq zmq_version
-  (_fun (_box _fixint) (_box _fixint) (_box _fixint) -> _void))
-
-(provide zmq_version)
-
-(module+ test
-  (let ([major (box -1)]
-        [minor (box -1)]
-        [patch (box -1)])
-    (check equal? (zmq_version major minor patch) (void))
-    (check-true (> (unbox major) 0))
-    (check-true (> (unbox minor) 0))
-    (check-true (> (unbox patch) 0))
-    ))
 
 ;; ---------------------------------------------------------------------------
 ;; context

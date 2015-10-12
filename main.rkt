@@ -1,5 +1,9 @@
 #lang racket/base
 
+(require zmq/version)
+
+(provide [all-from-out zmq/version])
+
 (require ffi/unsafe
          racket/format
          racket/port
@@ -7,21 +11,6 @@
          zmq/unsafe)
 
 (module+ test (require rackunit))
-
-;; ---------------------------------------------------------------------------
-;; version
-
-(define (zmq-version)
-  (let ([major (box -1)]
-        [minor (box -1)]
-        [patch (box -1)])
-    (zmq_version major minor patch)
-    (~a (unbox major) "." (unbox minor) "." (unbox patch))))
-
-(provide zmq-version)
-
-(module+ test
-  (check-regexp-match "[0-9]+\\.[0-9]+\\.[0-9]+$" (zmq-version)))
 
 ;; ---------------------------------------------------------------------------
 ;; context
