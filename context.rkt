@@ -1,9 +1,10 @@
 #lang racket/base
 
 (provide make-context context-get context-set! context-shutdown context-term
-         current-context with-context with-new-context)
+         with-context with-new-context)
 
 (require ffi/unsafe
+         zmq/dynamic
          zmq/unsafe/context)
 
 (struct context (ptr) #:property prop:cpointer 0)
@@ -24,8 +25,6 @@
   (void (zmq_ctx_term ctx)))
 
 ;; syntax
-
-(define current-context (make-parameter (make-context)))
 
 (define-syntax-rule (with-context ctx body ...)
   (parameterize ([current-context ctx]) body ...))

@@ -34,3 +34,6 @@
   (if (= (saved-errno) EAGAIN)
       (raise 'AGAIN)
       (error caller (zmq_strerror (saved-errno)))))
+
+;; ---------------------------------------------------------------------------
+;; common data types
