@@ -4,7 +4,7 @@
 
 (require ffi/unsafe
          ffi/unsafe/cvector
-         zmq/private/ext
+         zmq/ext
          zmq/unsafe/ctypes
          zmq/unsafe/define)
 

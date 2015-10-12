@@ -6,7 +6,7 @@
 
 (define (pre-installer collections-top-path racket-zeromq-path)
   (pre-install racket-zeromq-path
-               (build-path racket-zeromq-path "private")
+               racket-zeromq-path
                "ext.c"
                "."
                null

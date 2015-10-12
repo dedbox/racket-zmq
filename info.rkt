@@ -8,4 +8,4 @@
 (define version "0.0")
 (define pkg-authors '(eric))
 
-(define pre-install-collection "private/install.rkt")
+(define pre-install-collection "install.rkt")

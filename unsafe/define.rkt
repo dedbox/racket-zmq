@@ -4,7 +4,7 @@
 
 (require ffi/unsafe
          ffi/unsafe/define
-         zmq/private/ext)
+         zmq/ext)
 
 ;; ---------------------------------------------------------------------------
 ;; library loader
