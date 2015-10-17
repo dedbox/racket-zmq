@@ -17,7 +17,8 @@
 
 (define (bytes->message buf)
   (let ([msg (alloc-msg)])
-    (zmq_msg_init_data msg buf (bytes-length buf) cvoid cnull)
+    (zmq_msg_init_size msg (bytes-length buf))
+    (set-message-data! buf msg)
     (message msg)))
 
 (define (datum->message obj)
