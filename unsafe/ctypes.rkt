@@ -50,6 +50,8 @@
 (define _get_socket_option
   (_enum '(AFFINITY                 =  4
            IDENTITY                 =  5
+           SUBSCRIBE                =  6
+           UNSUBSCRIBE              =  7
            FD                       = 14
            EVENTS                   = 15
            TYPE                     = 16
@@ -83,9 +85,11 @@
 ;; setsockopt
 
 (define _set_socket_option
-  (_enum '(AFFINITY = 4
-           LINGER   = 17
-           RCVHWM   = 24
+  (_enum '(AFFINITY                 =  4
+           SUBSCRIBE                =  6
+           UNSUBSCRIBE              =  7
+           LINGER                   = 17
+           RCVHWM                   = 24
            )))
 
 ;; ---------------------------------------------------------------------------

@@ -25,12 +25,21 @@
 (define-setsockopt->ctype uint64)
 (define-setsockopt->ctype fixint)
 
+(define-zmq-alias [setsockopt->char* zmq_setsockopt]
+  (_efun _socket _set_socket_option
+         (val : _bytes)
+         (_size = (bytes-length val))
+         -> (rc : _fixint)
+         -> (if (= rc -1) (croak 'zmq_setsockopt) rc)))
+
 (define (zmq_setsockopt obj name val)
   (case name
-    [(AFFINITY) (setsockopt->uint64 obj name val)]
-    [(LINGER  ) (setsockopt->fixint obj name val)]
-    [(BACKLOG ) (setsockopt->fixint obj name val)]
-    [(RCVHWM  ) (setsockopt->fixint obj name val)]
+    [(AFFINITY   ) (setsockopt->uint64 obj name val)]
+    [(SUBSCRIBE  ) (setsockopt->char* obj name val)]
+    [(UNSUBSCRIBE) (setsockopt->char* obj name val)]
+    [(LINGER     ) (setsockopt->fixint obj name val)]
+    [(BACKLOG    ) (setsockopt->fixint obj name val)]
+    [(RCVHWM     ) (setsockopt->fixint obj name val)]
     ))
 
 (module+ test
