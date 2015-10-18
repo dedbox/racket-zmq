@@ -54,11 +54,11 @@
 
 (define-syntax-rule (with-new-socket type body ...)
   (parameterize ([current-socket (make-socket type)])
-    (begin0 (begin body ...) (socket-close))))
+    (begin0 (let () body ...) (socket-close))))
 
 (define-syntax-rule (let-socket ([name type] ...) body ...)
   (let ([name (make-socket type)] ...)
-    (begin0 (begin body ...) (socket-close name) ...)))
+    (begin0 (let () body ...) (socket-close name) ...)))
 
 (module+ test
   (require rackunit)

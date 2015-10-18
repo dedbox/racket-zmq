@@ -31,7 +31,7 @@
 
 (define-syntax-rule (with-new-context body ...)
   (with-context (make-context)
-    (begin0 (begin body ...) (context-shutdown) (context-term))))
+    (begin0 (let () body ...) (context-shutdown) (context-term))))
 
 (module+ test
   (require rackunit)

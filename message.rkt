@@ -57,15 +57,15 @@
 
 (define-syntax-rule (with-new-message body ...)
   (parameterize ([current-message (make-message)])
-    (begin0 (begin body ...) (message-close))))
+    (begin0 (let () body ...) (message-close))))
 
 (define-syntax-rule (with-new-message-size size body ...)
   (parameterize ([current-message (make-message size)])
-    (begin0 (begin body ...) (message-close))))
+    (begin0 (let () body ...) (message-close))))
 
 (define-syntax-rule (with-new-message-data buf body ...)
   (parameterize ([current-message (bytes->message buf)])
-    (begin0 (begin body ...) (message-close))))
+    (begin0 (let () body ...) (message-close))))
 
 (define-for-syntax (mdef->def stx)
   (syntax-case stx (empty size data)
