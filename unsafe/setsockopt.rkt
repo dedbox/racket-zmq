@@ -35,8 +35,8 @@
 (define (zmq_setsockopt obj name val)
   (case name
     [(AFFINITY   ) (setsockopt->uint64 obj name val)]
-    [(SUBSCRIBE  ) (setsockopt->char* obj name val)]
-    [(UNSUBSCRIBE) (setsockopt->char* obj name val)]
+    [(SUBSCRIBE  ) (setsockopt->char* obj name (string->bytes/utf-8 val))]
+    [(UNSUBSCRIBE) (setsockopt->char* obj name (string->bytes/utf-8 val))]
     [(LINGER     ) (setsockopt->fixint obj name val)]
     [(BACKLOG    ) (setsockopt->fixint obj name val)]
     [(RCVHWM     ) (setsockopt->fixint obj name val)]
