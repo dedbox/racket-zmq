@@ -50,8 +50,6 @@
 (define _get_socket_option
   (_enum '(AFFINITY                 =  4
            IDENTITY                 =  5
-           SUBSCRIBE                =  6
-           UNSUBSCRIBE              =  7
            FD                       = 14
            EVENTS                   = 15
            TYPE                     = 16
