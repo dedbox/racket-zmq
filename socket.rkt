@@ -4,6 +4,10 @@
          with-new-socket let-socket socket-send-bytes socket-send-string
          socket-recv-bytes socket-send socket-recv)
 
+;;; XXX if I put this in the above `provide`, right after `socket-recv-bytes`,
+;;; it won't be automatically re-exported by zmq/main.rkt. BUG?
+(provide socket-recv-string)
+
 (require ffi/unsafe
          racket/port
          zmq/context
@@ -46,6 +50,9 @@
   (let* ([buf (make-bytes size)]
          [len (zmq_recv sock buf size flags)])
     (subbytes buf 0 len)))
+
+(define (socket-recv-string [size 256] [flags null] [sock (current-socket)])
+  (bytes->string/utf-8 (socket-recv-bytes size flags sock)))
 
 ;; syntax
 
