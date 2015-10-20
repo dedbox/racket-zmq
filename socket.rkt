@@ -13,6 +13,8 @@
          zmq/context
          zmq/dynamic
          zmq/message
+         zmq/unsafe/ctypes
+         zmq/unsafe/message
          zmq/unsafe/poll
          zmq/unsafe/socket)
 
@@ -41,7 +43,7 @@
   (void (zmq_connect sock (string->bytes/utf-8 addr))))
 
 (define (socket-send-bytes buf [flags null] [sock (current-socket)])
-  (zmq_send sock buf (bytes-length buf) flags))
+  (zmq_send_const sock buf (bytes-length buf) flags))
 
 (define (socket-send-string str [flags null] [sock (current-socket)])
   (socket-send-bytes (string->bytes/utf-8 str) flags sock))
@@ -130,13 +132,23 @@
 ;; ---------------------------------------------------------------------------
 ;; message
 
+;; Beware: zmq_msg_send de-allocates the message automatically -- malloc the
+;; buffer in raw mode or the garbage collector will segfault.
 (define (socket-send obj [flags null] [sock (current-socket)])
-  (message-send flags (datum->message obj) sock))
+  (let* ([buf (with-output-to-bytes (λ _ (write obj)))]
+         [len (bytes-length buf)]
+         [msg (malloc _msg 'raw)])
+    (set-cpointer-tag! msg msg-tag)
+    (zmq_msg_init_size msg len)
+    (memcpy (zmq_msg_data msg) buf len)
+    (zmq_msg_send msg sock flags)))
 
 (define (socket-recv [flags null] [sock (current-socket)])
-  (let-message ([msg empty])
-    (message-recv flags msg sock)
-    (with-input-from-bytes (message-data msg) read)))
+  (let ([msg (malloc _msg 'atomic)])
+    (set-cpointer-tag! msg msg-tag)
+    (zmq_msg_init msg)
+    (zmq_msg_recv msg sock flags)
+    (with-input-from-bytes (zmq_msg_data msg) read)))
 
 (module+ test
   (with-new-context
