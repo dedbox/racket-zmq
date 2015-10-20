@@ -9,10 +9,8 @@
 (provide socket-recv-string)
 
 (require ffi/unsafe
-         racket/port
          zmq/context
          zmq/dynamic
-         zmq/message
          zmq/unsafe/ctypes
          zmq/unsafe/message
          zmq/unsafe/poll
@@ -79,55 +77,7 @@
       (check = (socket-send-bytes #"abc123" null Q) 6)
       (check-equal? (socket-recv-bytes 10 null P) #"abc123")
       (check = (socket-send-string "ok" null P) 2)
-      (check-equal? (socket-recv-bytes 5 null Q) #"ok")))
-
-  (with-new-context
-    (let-socket ([P 'REP] [Q 'REQ])
-      (check-equal? (socket-bind "inproc://message-test" P) (void))
-      (check-equal? (socket-connect "inproc://message-test" Q) (void))
-
-      (with-new-message
-        (with-new-message-size 3
-          (check-equal? (set-message-data! #"987") (void))
-          (check-equal? (message-data) #"987")
-          (with-socket Q (check = (message-send) 3)))
-        (with-socket P (check = (message-recv) 3))
-        (check-equal? (message-data) #"987"))
-
-      (let-message ([M size 10] [N empty])
-        (check = (message-size M) 10)
-        (check = (message-size N) 0)
-        (let ([buf (message-data M)])
-          (bytes-fill! buf 0)
-          (bytes-copy! buf 0 #"987zyx"))
-        (check-equal? (message-data M) #"987zyx\0\0\0\0")
-        (check-equal? (message-data N) #"")
-        (check = (message-send null M P) 10)
-        (check = (message-recv null N Q) 10)
-        (check-equal? (message-data N) #"987zyx\0\0\0\0")
-        (check-equal? (message-data M) #""))
-
-      (let-message ([M data #"654mon"] [N1 empty] [N2 empty])
-        (check = (message-size M) 6)
-        (check = (message-size N1) 0)
-        (check = (message-size N2) 0)
-        (check-equal? (message-data M) #"654mon")
-        (check-equal? (message-data N1) #"")
-        (check-equal? (message-data N2) #"")
-        (check-equal? (message-copy M N1) (void))
-        (check = (message-size M) 6)
-        (check = (message-size N1) 6)
-        (check = (message-size N2) 0)
-        (check-equal? (message-data M) #"654mon")
-        (check-equal? (message-data N1) #"654mon")
-        (check-equal? (message-data N2) #"")
-        (check-equal? (message-move M N2) (void))
-        (check = (message-size M) 0)
-        (check = (message-size N1) 6)
-        (check = (message-size N2) 6)
-        (check-equal? (message-data M) #"")
-        (check-equal? (message-data N1) #"654mon")
-        (check-equal? (message-data N2) #"654mon")))))
+      (check-equal? (socket-recv-string 5 null Q) "ok"))))
 
 ;; ---------------------------------------------------------------------------
 ;; message
@@ -135,20 +85,12 @@
 ;; Beware: zmq_msg_send de-allocates the message automatically -- malloc the
 ;; buffer in raw mode or the garbage collector will segfault.
 (define (socket-send obj [flags null] [sock (current-socket)])
-  (let* ([buf (with-output-to-bytes (λ _ (write obj)))]
-         [len (bytes-length buf)]
-         [msg (malloc _msg 'raw)])
-    (set-cpointer-tag! msg msg-tag)
-    (zmq_msg_init_size msg len)
-    (memcpy (zmq_msg_data msg) buf len)
-    (zmq_msg_send msg sock flags)))
+  (zmq_msg_send (datum->msg 'raw obj) sock flags))
 
 (define (socket-recv [flags null] [sock (current-socket)])
-  (let ([msg (malloc _msg 'atomic)])
-    (set-cpointer-tag! msg msg-tag)
-    (zmq_msg_init msg)
+  (let ([msg (init-msg 'atomic)])
     (zmq_msg_recv msg sock flags)
-    (with-input-from-bytes (zmq_msg_data msg) read)))
+    (msg->datum msg)))
 
 (module+ test
   (with-new-context

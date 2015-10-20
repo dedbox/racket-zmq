@@ -2,9 +2,11 @@
 
 (provide zmq_msg_init zmq_msg_init_size zmq_msg_init_data cvoid cnull
          zmq_msg_size zmq_msg_data zmq_msg_send zmq_msg_recv zmq_msg_close
-         zmq_msg_copy zmq_msg_move alloc-msg)
+         zmq_msg_copy zmq_msg_move init-msg size->msg bytes->msg datum->msg
+         msg->datum)
 
 (require ffi/unsafe
+         racket/port
          zmq/unsafe/ctypes
          zmq/unsafe/define)
 
@@ -27,19 +29,41 @@
 (define-zmq-check zmq_msg_copy _msg-pointer _msg-pointer)
 (define-zmq-check zmq_msg_move _msg-pointer _msg-pointer)
 
-(define (alloc-msg [mode 'atomic])
+(define (alloc-msg mode)
   (let ([msg (malloc _msg mode)])
     (set-cpointer-tag! msg msg-tag)
     msg))
+
+(define (init-msg mode)
+  (let ([msg (alloc-msg mode)])
+    (zmq_msg_init msg)
+    msg))
+
+(define (size->msg mode size)
+  (let ([msg (alloc-msg mode)])
+    (zmq_msg_init_size msg size)
+    msg))
+
+(define (bytes->msg mode buf)
+  (let* ([len (bytes-length buf)]
+         [msg (size->msg mode len)])
+    (memcpy (zmq_msg_data msg) buf len)
+    msg))
+
+(define (datum->msg mode obj)
+  (bytes->msg mode (with-output-to-bytes (λ _ (write obj)))))
+
+(define (msg->datum msg)
+  (with-input-from-bytes (zmq_msg_data msg) read))
 
 (module+ test
   (require rackunit
            zmq/unsafe/context
            zmq/unsafe/socket)
 
-  (let ([M1 (alloc-msg)]
-        [M2 (alloc-msg)]
-        [M3 (alloc-msg)])
+  (let ([M1 (alloc-msg 'atomic)]
+        [M2 (alloc-msg 'atomic)]
+        [M3 (alloc-msg 'atomic)])
     (check = (zmq_msg_init M1) 0)
     (check = (zmq_msg_init_size M2 512) 0)
     (check = (zmq_msg_init_data M3 #"abc" 3 cvoid cnull) 0)
@@ -51,9 +75,9 @@
     (check = (zmq_msg_close M2) 0)
     (check = (zmq_msg_close M3) 0))
 
-  (let ([M5 (alloc-msg)]
-        [M6 (alloc-msg)]
-        [M7 (alloc-msg)])
+  (let ([M5 (alloc-msg 'atomic)]
+        [M6 (alloc-msg 'atomic)]
+        [M7 (alloc-msg 'atomic)])
     (check = (zmq_msg_init_data M5 #"567vut" 6 cvoid cnull) 0)
     (check = (zmq_msg_init M6) 0)
     (check = (zmq_msg_init M7) 0)
@@ -70,8 +94,8 @@
   (let* ([C (zmq_ctx_new)]
          [P (zmq_socket C 'REP)]
          [Q (zmq_socket C 'REQ)]
-         [M1 (alloc-msg)]
-         [M2 (alloc-msg)])
+         [M1 (alloc-msg 'raw)]
+         [M2 (alloc-msg 'atomic)])
     (check = (zmq_bind P #"inproc://msg-test") 0)
     (check = (zmq_connect Q #"inproc://msg-test") 0)
     (check = (zmq_msg_init_size M1 3) 0)
@@ -84,8 +108,8 @@
   (let* ([C (zmq_ctx_new)]
          [P (zmq_socket C 'REP)]
          [Q (zmq_socket C 'REQ)]
-         [M1 (alloc-msg)]
-         [M2 (alloc-msg)])
+         [M1 (alloc-msg 'atomic)]
+         [M2 (alloc-msg 'raw)])
     (check = (zmq_msg_init M1) 0)
     (check = (zmq_msg_init_size M2 10) 0)
     (check = (zmq_msg_size M1) 0)
@@ -106,8 +130,8 @@
   (let* ([C (zmq_ctx_new)]
          [P (zmq_socket C 'REP)]
          [Q (zmq_socket C 'REQ)]
-         [M3 (alloc-msg)]
-         [M4 (alloc-msg)])
+         [M3 (alloc-msg 'atomic)]
+         [M4 (alloc-msg 'atomic)])
     (check = (zmq_msg_init_data M3 #"654mon" 6 cvoid cnull) 0)
     (check = (zmq_msg_init M4) 0)
     (check = (zmq_msg_size M3) 6)
