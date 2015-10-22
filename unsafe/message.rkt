@@ -2,8 +2,7 @@
 
 (provide zmq_msg_init zmq_msg_init_size zmq_msg_init_data cvoid cnull
          zmq_msg_size zmq_msg_data zmq_msg_send zmq_msg_recv zmq_msg_close
-         zmq_msg_copy zmq_msg_move init-msg size->msg bytes->msg datum->msg
-         msg->datum)
+         zmq_msg_copy zmq_msg_move init-msg size->msg bytes->msg)
 
 (require ffi/unsafe
          racket/port
@@ -49,12 +48,6 @@
          [msg (size->msg mode len)])
     (memcpy (zmq_msg_data msg) buf len)
     msg))
-
-(define (datum->msg mode obj)
-  (bytes->msg mode (with-output-to-bytes (λ _ (write obj)))))
-
-(define (msg->datum msg)
-  (with-input-from-bytes (zmq_msg_data msg) read))
 
 (module+ test
   (require rackunit
